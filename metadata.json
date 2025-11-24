@@ -1,0 +1,5 @@
+{
+  "name": "LexAI Legal Assistant",
+  "description": "A professional legal assistant powered by Gemini 3 Pro. Upload contracts, briefs, or legal documents (PDF, Text) to receive deep analysis, clause reviews, and answers to complex legal questions.",
+  "requestFramePermissions": []
+}
