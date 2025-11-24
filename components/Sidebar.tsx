@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
         {files.length === 0 ? (
           <div className="text-center py-10 px-4 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30">
             <p className="text-sm text-slate-400 mb-2">No documents uploaded</p>
-            <p className="text-xs text-slate-500">Upload legal docs (PDF, TXT)</p>
+            <p className="text-xs text-slate-500">Supported: PDF, DOCX, TXT</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-200 truncate" title={file.name}>{file.name}</p>
                   <p className="text-xs text-slate-500 flex justify-between mt-1">
-                    <span>{(file.size / 1024).toFixed(1)} KB</span>
+                    <span>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     <span className={file.isSent ? "text-green-400" : "text-amber-400"}>
                       {file.isSent ? "Analyzed" : "Pending"}
                     </span>
@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
           onChange={handleFileChange} 
           className="hidden" 
           multiple 
-          accept=".pdf,.txt,application/pdf,text/plain"
+          accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         />
         <button 
           onClick={triggerUpload}
@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
           <span>Add Documents</span>
         </button>
         <p className="text-[10px] text-center text-slate-500 mt-2">
-          Supports PDF & Text Files
+          Max 50MB per file
         </p>
       </div>
     </div>

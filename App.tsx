@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { UploadedFile, Message, ChatStatus } from './types';
 import { sendMessageStream, resetChat } from './services/geminiService';
+// @ts-ignore
+import mammoth from 'mammoth';
 
 // Simple ID generator replacement
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -15,45 +17,67 @@ const App: React.FC = () => {
 
   const handleFileUpload = async (fileList: FileList) => {
     const newFiles: UploadedFile[] = [];
+    // Increased limit to 50MB as requested.
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; 
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       
-      // Simple validation
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Max 10MB.`);
+      // Validation
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File "${file.name}" exceeds the 50MB limit.`);
         continue;
       }
 
-      // Strict type checking to avoid API errors
-      // Note: text/plain check is basic; valid text files might differ slightly but this covers standard .txt
-      if (file.type !== 'application/pdf' && file.type !== 'text/plain') {
-        alert(`File ${file.name} is not supported. Please upload PDF or Text files.`);
+      // Check supported types
+      const isPdf = file.type === 'application/pdf';
+      const isTxt = file.type === 'text/plain' || file.name.endsWith('.txt');
+      const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
+
+      if (!isPdf && !isTxt && !isDocx) {
+        alert(`File ${file.name} is not supported. Please upload PDF, DOCX, or Text files.`);
         continue;
       }
 
-      // Read file
-      const reader = new FileReader();
-      const filePromise = new Promise<UploadedFile>((resolve) => {
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          // IMPORTANT: Gemini expects just the base64, so we strip the data url prefix
-          const base64Data = result.split(',')[1];
-          
-          resolve({
-            id: generateId(),
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            data: base64Data,
-            mimeType: file.type,
-            isSent: false
+      try {
+        let base64Data = '';
+        let finalMimeType = file.type;
+
+        if (isDocx) {
+          // Handle DOCX: Extract text -> Convert to Base64 -> Treat as text/plain
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          // safely encode utf8 text to base64
+          base64Data = btoa(unescape(encodeURIComponent(result.value)));
+          // We mask it as text/plain so the service handles it as a text part
+          finalMimeType = 'text/plain'; 
+        } else {
+          // Handle PDF / Text
+          const reader = new FileReader();
+          base64Data = await new Promise<string>((resolve, reject) => {
+            reader.onload = (e) => {
+              const result = e.target?.result as string;
+              resolve(result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
           });
-        };
-        reader.readAsDataURL(file);
-      });
+        }
 
-      newFiles.push(await filePromise);
+        newFiles.push({
+          id: generateId(),
+          name: file.name,
+          type: file.type, // keep original type for UI display
+          size: file.size,
+          data: base64Data,
+          mimeType: finalMimeType, // used for API logic
+          isSent: false
+        });
+
+      } catch (err) {
+        console.error("Error processing file", file.name, err);
+        alert(`Failed to process ${file.name}`);
+      }
     }
 
     setFiles(prev => [...prev, ...newFiles]);
@@ -127,7 +151,7 @@ const App: React.FC = () => {
       setMessages(prev => 
         prev.map(msg => 
           msg.id === newBotMessageId 
-            ? { ...msg, content: `**Error:** ${errorMessage}. Please check your connection or file validity.`, isThinking: false } 
+            ? { ...msg, content: `**Error:** ${errorMessage}. \n\n*Note: For files > 20MB, the API might reject the request payload. Try splitting the document.*`, isThinking: false } 
             : msg
         )
       );
