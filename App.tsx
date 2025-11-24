@@ -3,8 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { UploadedFile, Message, ChatStatus } from './types';
 import { sendMessageStream, resetChat } from './services/geminiService';
-// @ts-ignore
-import mammoth from 'mammoth';
+// Side-effect import to ensure the script loads and attaches to window
+import 'mammoth';
 
 // Simple ID generator replacement
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -45,6 +45,13 @@ const App: React.FC = () => {
 
         if (isDocx) {
           // Handle DOCX: Extract text -> Convert to Base64 -> Treat as text/plain
+          // Access mammoth from global scope as the CDN version attaches to window
+          const mammoth = (window as any).mammoth;
+          
+          if (!mammoth) {
+             throw new Error("DOCX processing library not loaded.");
+          }
+
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           // safely encode utf8 text to base64
@@ -76,7 +83,7 @@ const App: React.FC = () => {
 
       } catch (err) {
         console.error("Error processing file", file.name, err);
-        alert(`Failed to process ${file.name}`);
+        alert(`Failed to process ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
