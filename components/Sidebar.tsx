@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
         {files.length === 0 ? (
           <div className="text-center py-10 px-4 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30">
             <p className="text-sm text-slate-400 mb-2">No documents uploaded</p>
-            <p className="text-xs text-slate-500">Upload contracts, briefs, or evidence (PDF, TXT)</p>
+            <p className="text-xs text-slate-500">Upload legal docs (PDF, TXT)</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
           onChange={handleFileChange} 
           className="hidden" 
           multiple 
-          accept=".pdf,.txt,.doc,.docx,.rtf,application/pdf,text/plain"
+          accept=".pdf,.txt,application/pdf,text/plain"
         />
         <button 
           onClick={triggerUpload}
@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onUpload, onRemove, onR
           <span>Add Documents</span>
         </button>
         <p className="text-[10px] text-center text-slate-500 mt-2">
-          Secure • Encrypted • Private
+          Supports PDF & Text Files
         </p>
       </div>
     </div>

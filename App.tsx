@@ -25,6 +25,13 @@ const App: React.FC = () => {
         continue;
       }
 
+      // Strict type checking to avoid API errors
+      // Note: text/plain check is basic; valid text files might differ slightly but this covers standard .txt
+      if (file.type !== 'application/pdf' && file.type !== 'text/plain') {
+        alert(`File ${file.name} is not supported. Please upload PDF or Text files.`);
+        continue;
+      }
+
       // Read file
       const reader = new FileReader();
       const filePromise = new Promise<UploadedFile>((resolve) => {
@@ -114,12 +121,13 @@ const App: React.FC = () => {
       });
 
       setStatus('idle');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       setMessages(prev => 
         prev.map(msg => 
           msg.id === newBotMessageId 
-            ? { ...msg, content: "**Error:** Failed to process request. Please try again.", isThinking: false } 
+            ? { ...msg, content: `**Error:** ${errorMessage}. Please check your connection or file validity.`, isThinking: false } 
             : msg
         )
       );

@@ -6,14 +6,30 @@ const cleanBase64 = (dataUrl: string) => {
   return dataUrl.split(',')[1] || dataUrl;
 };
 
+// Helper to decode base64 to UTF-8 text safely
+const base64ToUtf8 = (base64: string): string => {
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    console.error("Failed to decode text file", e);
+    return "";
+  }
+};
+
 let chatSession: Chat | null = null;
 let ai: GoogleGenAI | null = null;
 
 export const initGemini = () => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key not found");
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API Key not found in environment variables");
   }
-  ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  ai = new GoogleGenAI({ apiKey });
 };
 
 export const resetChat = () => {
@@ -31,7 +47,7 @@ export const sendMessageStream = async (
   // Initialize chat if not exists
   if (!chatSession) {
     chatSession = ai.chats.create({
-      model: 'gemini-3-pro-preview', // High reasoning model for legal tasks
+      model: 'gemini-2.5-flash', 
       config: {
         systemInstruction: `You are LexAI, an elite legal assistant AI specialized in Indian Law, designed to support Indian lawyers and legal professionals.
 
@@ -51,26 +67,32 @@ export const sendMessageStream = async (
         - **Accuracy & Citation:** Cite specific Sections, Articles, or Orders (e.g., "Order 39, Rules 1 & 2 of CPC").
         - **Tone:** Professional, Objective, and Courtroom-ready (e.g., "Learned counsel", "Hon'ble Court").
         - **Disclaimer:** When providing analysis, implicitly or explicitly remind the user that you are an AI assistant and this is not a substitute for professional legal counsel from a registered Advocate.
-        - **Formatting:** Use Markdown for formatting: headers, bullet points, and bold text for emphasis.`,
-        thinkingConfig: {
-            thinkingBudget: 4096 // Allocating budget for complex legal reasoning
-        }
+        - **Formatting:** Use Markdown for formatting: headers, bullet points, and bold text for emphasis.`
       },
     });
   }
 
   // Prepare parts
-  // We can mix text and inlineData in the user message
   const parts: any[] = [];
   
   // Add new files that haven't been introduced to the context yet
   for (const file of newFiles) {
-    parts.push({
-      inlineData: {
-        mimeType: file.mimeType,
-        data: file.data
-      }
-    });
+    // Check if it's a text file, if so, decode and send as text part
+    // This avoids mime-type errors for text/plain in inlineData and improves understanding
+    if (file.mimeType === 'text/plain' || file.name.endsWith('.txt')) {
+      const decodedContent = base64ToUtf8(file.data);
+      parts.push({
+        text: `[Document: ${file.name}]\n${decodedContent}`
+      });
+    } else {
+      // For PDFs and images
+      parts.push({
+        inlineData: {
+          mimeType: file.mimeType,
+          data: file.data
+        }
+      });
+    }
   }
 
   // Add the text prompt
