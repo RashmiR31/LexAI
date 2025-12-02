@@ -3,8 +3,6 @@ import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { UploadedFile, Message, ChatStatus } from './types';
 import { sendMessageStream, resetChat } from './services/geminiService';
-// Side-effect import to ensure the script loads and attaches to window
-import 'mammoth';
 
 // Simple ID generator replacement
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -33,9 +31,11 @@ const App: React.FC = () => {
       const isPdf = file.type === 'application/pdf';
       const isTxt = file.type === 'text/plain' || file.name.endsWith('.txt');
       const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
+      const isExcel = file.type === 'application/vnd.ms-excel' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.name.endsWith('.xls') || file.name.endsWith('.xlsx');
 
-      if (!isPdf && !isTxt && !isDocx) {
-        alert(`File ${file.name} is not supported. Please upload PDF, DOCX, or Text files.`);
+
+      if (!isPdf && !isTxt && !isDocx && !isExcel) {
+        alert(`File ${file.name} is not supported. Please upload PDF, DOCX, TXT, or Excel files.`);
         continue;
       }
 
@@ -45,11 +45,26 @@ const App: React.FC = () => {
 
         if (isDocx) {
           // Handle DOCX: Extract text -> Convert to Base64 -> Treat as text/plain
-          // Access mammoth from global scope as the CDN version attaches to window
-          const mammoth = (window as any).mammoth;
           
+          // Robust check: If mammoth isn't loaded globally, try to load it dynamically
+          if (!(window as any).mammoth) {
+             console.log("DOCX library missing, attempting dynamic load...");
+             try {
+                await new Promise<void>((resolve, reject) => {
+                   const script = document.createElement('script');
+                   script.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+                   script.onload = () => resolve();
+                   script.onerror = () => reject(new Error("Failed to download DOCX library"));
+                   document.head.appendChild(script);
+                });
+             } catch (loadErr) {
+                throw new Error("DOCX processing library could not be loaded. Please check your internet connection.");
+             }
+          }
+
+          const mammoth = (window as any).mammoth;
           if (!mammoth) {
-             throw new Error("DOCX processing library not loaded.");
+             throw new Error("DOCX library loaded but failed to initialize. Please refresh.");
           }
 
           const arrayBuffer = await file.arrayBuffer();
@@ -58,6 +73,43 @@ const App: React.FC = () => {
           base64Data = btoa(unescape(encodeURIComponent(result.value)));
           // We mask it as text/plain so the service handles it as a text part
           finalMimeType = 'text/plain'; 
+        } else if (isExcel) {
+          // Handle Excel
+          if (!(window as any).XLSX) {
+             console.log("XLSX library missing, attempting dynamic load...");
+             try {
+                await new Promise<void>((resolve, reject) => {
+                   const script = document.createElement('script');
+                   script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+                   script.onload = () => resolve();
+                   script.onerror = () => reject(new Error("Failed to download XLSX library"));
+                   document.head.appendChild(script);
+                });
+             } catch (loadErr) {
+                throw new Error("Excel processing library could not be loaded. Please check your internet connection.");
+             }
+          }
+
+          const XLSX = (window as any).XLSX;
+          if (!XLSX) {
+             throw new Error("Excel library loaded but failed to initialize. Please refresh.");
+          }
+
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          
+          let allText = "";
+          workbook.SheetNames.forEach((sheetName: string) => {
+              const sheet = workbook.Sheets[sheetName];
+              const csv = XLSX.utils.sheet_to_csv(sheet);
+              if (csv && csv.trim().length > 0) {
+                  allText += `--- Sheet: ${sheetName} ---\n${csv}\n\n`;
+              }
+          });
+
+          base64Data = btoa(unescape(encodeURIComponent(allText)));
+          finalMimeType = 'text/plain';
+
         } else {
           // Handle PDF / Text
           const reader = new FileReader();

@@ -14,8 +14,7 @@
     "@google/genai": "^1.30.0",
     "lucide-react": "^0.554.0",
     "react-markdown": "^10.1.0",
-    "uuid": "^13.0.0",
-    "mammoth": "^1.8.0"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
