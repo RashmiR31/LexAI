@@ -1,10 +1,6 @@
-import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
-import { UploadedFile } from "../types";
 
-// Helper to sanitize base64
-const cleanBase64 = (dataUrl: string) => {
-  return dataUrl.split(',')[1] || dataUrl;
-};
+import { GoogleGenAI } from "@google/genai";
+import { UploadedFile } from "../types";
 
 // Helper to decode base64 to UTF-8 text safely
 const base64ToUtf8 = (base64: string): string => {
@@ -21,7 +17,7 @@ const base64ToUtf8 = (base64: string): string => {
   }
 };
 
-let chatSession: Chat | null = null;
+let chatSession: any = null;
 let ai: GoogleGenAI | null = null;
 
 export const initGemini = () => {
@@ -29,7 +25,6 @@ export const initGemini = () => {
   if (!apiKey) {
     console.error("API Key not found");
   }
-  // Safe initialization even if key is missing to prevent immediate crash, though calls will fail
   ai = new GoogleGenAI({ apiKey: apiKey || '' });
 };
 
@@ -48,31 +43,22 @@ export const sendMessageStream = async (
   // Initialize chat if not exists
   if (!chatSession) {
     chatSession = ai.chats.create({
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-3-pro-preview', 
       config: {
         systemInstruction: `You are LexAI, an elite legal assistant AI specialized in Indian Law.
 
         **CRITICAL INSTRUCTION FOR LARGE DOCUMENTS:**
-        You have a 1 Million Token Context Window. When a user uploads large documents (e.g., 500+ pages), you MUST:
-        1. **Read Exhaustively:** Do not just scan the first few pages. Process the entire document context.
-        2. **Cite Specifics:** When answering, refer to specific page numbers, clause numbers, or paragraph numbers from the uploaded file to ensure accuracy.
-        3. **Synthesize:** If information is scattered across hundreds of pages, synthesize it into a coherent answer.
+        You have a high-capacity context window. When a user uploads large documents (PDF, DOCX, XLS, TXT), you MUST:
+        1. **Read Exhaustively:** Process the entire document context. Do not ignore parts of the file.
+        2. **Cite Specifics:** Refer to specific page numbers, clause numbers, or table cells from the uploaded file.
+        3. **Analyze Multi-Format Data:** If spreadsheets (XLSX) are provided, interpret the data rows/columns as part of the legal case (e.g., financial statements, employee lists).
 
         **Jurisdiction & Knowledge Base:**
         - **Primary Jurisdiction:** India.
-        - **Key Statutes:** Constitution of India, IPC, CrPC/BNSS, BNS, Contract Act, Companies Act, CPC, Evidence Act.
+        - **Key Statutes:** Constitution of India, Bharatiya Nyaya Sanhita (BNS), Bharatiya Nagarik Suraksha Sanhita (BNSS), Contract Act, Companies Act, CPC, Evidence Act.
         
-        **Core Functions:**
-        1. **General Legal Conversation:** Professional discussion on legal concepts, strategy, and ethics.
-        2. **Deep Document Analysis:** Review, summarize, and cross-reference large legal documents.
-        3. **Drafting:** Create Indian legal standard drafts (Notices, Affidavits).
-
-        **Operational Guidelines:**
-        - **Context Awareness:** Prioritize uploaded document content over general knowledge.
-        - **Accuracy:** Be precise. If a document is silent on an issue, state that clearly. Do not hallucinate clauses.
-        - **Tone:** Professional, Objective, Courtroom-ready.
-        - **Disclaimer:** Remind the user you are an AI assistant, not a replacement for a registered Advocate.
-        - **Formatting:** Use Markdown with clear headers and bullet points.`
+        **Tone:** Professional, Objective, Courtroom-ready.
+        **Disclaimer:** Remind the user you are an AI assistant, not a replacement for a registered Advocate. Use Markdown for formatting.`
       },
     });
   }
@@ -80,16 +66,14 @@ export const sendMessageStream = async (
   // Prepare parts
   const parts: any[] = [];
   
-  // Add new files that haven't been introduced to the context yet
+  // Add new files
   for (const file of newFiles) {
-    // Check if it's a text file, if so, decode and send as text part
     if (file.mimeType === 'text/plain' || file.name.endsWith('.txt')) {
       const decodedContent = base64ToUtf8(file.data);
       parts.push({
         text: `[Document: ${file.name}]\n${decodedContent}`
       });
     } else {
-      // For PDFs and images
       parts.push({
         inlineData: {
           mimeType: file.mimeType,
@@ -104,9 +88,9 @@ export const sendMessageStream = async (
     parts.push({ text });
   }
 
-  // If we have files but no text (rare, but possible if user just drops files), add a default prompt
+  // Fallback if only files sent
   if (parts.length > 0 && !text && newFiles.length > 0) {
-      parts.push({ text: "I have uploaded these documents. Please provide a detailed summary and analysis based on Indian Law, citing specific clauses or pages where relevant." });
+      parts.push({ text: "Please analyze the uploaded documents and provide a professional summary based on Indian legal standards." });
   }
 
   try {
@@ -114,15 +98,19 @@ export const sendMessageStream = async (
 
     let fullText = "";
     for await (const chunk of resultStream) {
-       const chunkText = (chunk as GenerateContentResponse).text;
+       const chunkText = chunk.text;
        if (chunkText) {
          fullText += chunkText;
          onChunk(fullText);
        }
     }
     return fullText;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    // Handle key selection error if it occurs
+    if (error.message?.includes("Requested entity was not found")) {
+        throw new Error("API Key configuration issue. Please ensure your project is properly set up.");
+    }
     throw error;
   }
 };
